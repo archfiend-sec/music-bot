@@ -2,6 +2,7 @@ import os
 import threading
 from flask import Flask
 from pyrogram import Client, filters
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from pytgcalls import PyTgCalls
 from pytgcalls.types import MediaStream
 import yt_dlp
@@ -33,7 +34,7 @@ call_py = PyTgCalls(assistant)
 async def play_song(client, message):
     query = " ".join(message.command[1:])
     if not query:
-        return await message.reply("Give me a song name or YouTube link to play.")
+        return await message.reply("Give me a song name to play.")
 
     status_msg = await message.reply("🎧 Fetching audio stream...")
 
@@ -47,17 +48,56 @@ async def play_song(client, message):
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # Using scsearch (SoundCloud) to avoid YouTube bot blockers
             info = ydl.extract_info(f"scsearch:{query}", download=False)['entries'][0]
-
-
             audio_url = info['url']
             title = info['title']
 
-        await call_py.play(message.chat.id, MediaStream(audio_url))
-        await status_msg.edit(f"▶️ **Now Playing:** {title}")
+        # Playback Logic
+        chat_id = message.chat.id
+        try:
+            await call_py.join_group_call(chat_id, MediaStream(audio_url))
+        except Exception:
+            # If already joined, just change the stream to the new song
+            await call_py.change_stream(chat_id, MediaStream(audio_url))
+
+        # The Interactive Play Bar
+        buttons = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("⏸ Pause", callback_data="pause"),
+                InlineKeyboardButton("▶️ Resume", callback_data="resume"),
+                InlineKeyboardButton("⏹ Stop", callback_data="stop")
+            ]
+        ])
+        
+        await status_msg.edit(f"▶️ **Now Playing:** {title}", reply_markup=buttons)
         
     except Exception as e:
         await status_msg.edit(f"Stream encountered an issue: `{e}`")
+
+
+# --- Button Control Logic ---
+@bot.on_callback_query()
+async def cb_handler(client, query):
+    chat_id = query.message.chat.id
+    
+    # Only allow admins or the person who requested the song to use the buttons
+    try:
+        if query.data == "pause":
+            await call_py.pause_stream(chat_id)
+            await query.answer("⏸ Music Paused")
+        
+        elif query.data == "resume":
+            await call_py.resume_stream(chat_id)
+            await query.answer("▶️ Music Resumed")
+        
+        elif query.data == "stop":
+            await call_py.leave_group_call(chat_id)
+            await query.answer("⏹ Music Stopped")
+            await query.message.edit("⏹ **Playback Stopped.**")
+            
+    except Exception as e:
+        await query.answer(f"Action failed. Is the music playing?", show_alert=True)
 
 print("Launching systems...")
 call_py.start()
