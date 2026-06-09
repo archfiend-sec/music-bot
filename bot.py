@@ -47,7 +47,9 @@ async def play_song(client, message):
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(f"ytsearch:{query}", download=False)['entries'][0]
+            info = ydl.extract_info(f"scsearch:{query}", download=False)['entries'][0]
+
+
             audio_url = info['url']
             title = info['title']
 
