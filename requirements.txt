@@ -1,5 +1,5 @@
 pyrogram
-pytgcalls
+py-tgcalls
 yt-dlp
 tgcrypto
 flask
