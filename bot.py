@@ -48,17 +48,14 @@ async def play_song(client, message):
 
     status_msg = await message.reply("🎧 Fetching audio stream...")
 
-    # Advanced architecture configuration for signature parsing
+    # Strict YouTube Extraction Settings
     ydl_opts = {
         'format': 'bestaudio/best',  
         'noplaylist': True,
         'quiet': True,
         'prefer_ffmpeg': True,       
         'geo_bypass': True,          
-        # This tells the script to pull the JS challenge files dynamically from GitHub
-        'remote_components': ['ejs:github'], 
     }
-    
     if os.path.exists("cookies.txt"):
         ydl_opts['cookiefile'] = "cookies.txt"
 
