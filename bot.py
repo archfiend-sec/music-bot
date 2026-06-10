@@ -48,13 +48,15 @@ async def play_song(client, message):
 
     status_msg = await message.reply("🎧 Fetching audio stream...")
 
-    # Robust audio fallback extraction configuration
+    # Advanced architecture configuration for signature parsing
     ydl_opts = {
-        'format': 'bestaudio/best',  # Look for the absolute best audio-only stream
+        'format': 'bestaudio/best',  
         'noplaylist': True,
         'quiet': True,
-        'prefer_ffmpeg': True,       # Tell it to use FFmpeg directly to read the link
-        'geo_bypass': True,          # Prevents region locks from interrupting the fetch
+        'prefer_ffmpeg': True,       
+        'geo_bypass': True,          
+        # This tells the script to pull the JS challenge files dynamically from GitHub
+        'remote_components': ['ejs:github'], 
     }
     
     if os.path.exists("cookies.txt"):
