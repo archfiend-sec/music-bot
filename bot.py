@@ -4,6 +4,7 @@ from flask import Flask
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from pytgcalls import PyTgCalls
+
 import yt_dlp
 
 # --- Web Server for UptimeRobot ---
@@ -24,26 +25,12 @@ API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 SESSION_STRING = os.environ.get("SESSION_STRING")
-YOUTUBE_COOKIE = os.environ.get("YOUTUBE_COOKIE")  # Reads your copied string
-
-# Dynamic Cookie File Generator (Converts plain text into a valid layout)
-COOKIE_FILE_PATH = None
-if YOUTUBE_COOKIE:
-    COOKIE_FILE_PATH = "generated_cookies.txt"
-    with open(COOKIE_FILE_PATH, "w") as f:
-        f.write("# Netscape HTTP Cookie File\n")
-        if YOUTUBE_COOKIE.strip().startswith("# Netscape"):
-            f.write(YOUTUBE_COOKIE.strip())
-        else:
-            for item in YOUTUBE_COOKIE.split(";"):
-                item = item.strip()
-                if not item or "=" not in item:
-                    continue
-                name, value = item.split("=", 1)
-                f.write(f".youtube.com\tTRUE\t/\tTRUE\t0\t{name}\t{value}\n")
+YOUTUBE_COOKIE = os.environ.get("YOUTUBE_COOKIE") # Direct text from Firefox
 
 bot = Client("music_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 assistant = Client("assistant", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
+
+# Initialize the Direct-Stream PyTgCalls Engine
 call_py = PyTgCalls(assistant)
 
 @bot.on_message(filters.command("play") & filters.group)
@@ -54,6 +41,7 @@ async def play_song(client, message):
 
     status_msg = await message.reply("🎧 Fetching audio stream...")
 
+    # Clean configurations without any cookiefile parameters
     ydl_opts = {
         'format': 'bestaudio/best',
         'extract_audio': True,
@@ -63,8 +51,11 @@ async def play_song(client, message):
         'extractor_args': {'youtube': {'client': ['android']}},
     }
     
-    if COOKIE_FILE_PATH:
-        ydl_opts['cookiefile'] = COOKIE_FILE_PATH
+    # Injecting the raw text cookie straight into the HTTP network headers
+    if YOUTUBE_COOKIE:
+        ydl_opts['http_headers'] = {
+            'Cookie': YOUTUBE_COOKIE.strip()
+        }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -75,6 +66,7 @@ async def play_song(client, message):
         chat_id = message.chat.id
         await call_py.play(chat_id, audio_url)
 
+        # The Interactive Play Bar
         buttons = InlineKeyboardMarkup([
             [
                 InlineKeyboardButton("⏸ Pause", callback_data="pause"),
@@ -93,18 +85,22 @@ async def play_song(client, message):
 @bot.on_callback_query()
 async def cb_handler(client, query):
     chat_id = query.message.chat.id
+    
     try:
         if query.data == "pause":
             await call_py.pause(chat_id)
             await query.answer("⏸ Music Paused")
+        
         elif query.data == "resume":
             await call_py.resume(chat_id)
             await query.answer("▶️ Music Resumed")
+        
         elif query.data == "stop":
             await call_py.leave_call(chat_id)
             await query.answer("⏹ Music Stopped")
             await query.message.edit("⏹ **Playback Stopped.**")
-    except Exception:
+            
+    except Exception as e:
         await query.answer("Action failed. Is the music playing?", show_alert=True)
 
 print("Launching systems...")
