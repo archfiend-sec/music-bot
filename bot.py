@@ -24,17 +24,6 @@ API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 SESSION_STRING = os.environ.get("SESSION_STRING")
-YOUTUBE_COOKIE = os.environ.get("YOUTUBE_COOKIE")
-
-# --- Dynamic Cookie Builder ---
-if YOUTUBE_COOKIE:
-    with open("cookies.txt", "w") as f:
-        f.write("# Netscape HTTP Cookie File\n\n")
-        for item in YOUTUBE_COOKIE.split(";"):
-            item = item.strip()
-            if "=" in item:
-                key, value = item.split("=", 1)
-                f.write(f".youtube.com\tTRUE\t/\tTRUE\t2147483647\t{key}\t{value}\n")
 
 bot = Client("music_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 assistant = Client("assistant", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
@@ -48,16 +37,19 @@ async def play_song(client, message):
 
     status_msg = await message.reply("🎧 Fetching audio stream...")
 
-    # Strict YouTube Extraction Settings
+    # TV/iOS Protocol Spoofing - Safely bypasses blocks without cookies
     ydl_opts = {
         'format': 'bestaudio/best',  
         'noplaylist': True,
         'quiet': True,
         'prefer_ffmpeg': True,       
         'geo_bypass': True,          
+        'extractor_args': {
+            'youtube': {
+                'client': ['tv', 'ios']
+            }
+        }
     }
-    if os.path.exists("cookies.txt"):
-        ydl_opts['cookiefile'] = "cookies.txt"
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
