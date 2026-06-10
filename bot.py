@@ -27,7 +27,6 @@ SESSION_STRING = os.environ.get("SESSION_STRING")
 YOUTUBE_COOKIE = os.environ.get("YOUTUBE_COOKIE")
 
 # --- Dynamic Cookie Builder ---
-# This converts your raw Firefox string into a flawless Netscape file on startup.
 if YOUTUBE_COOKIE:
     with open("cookies.txt", "w") as f:
         f.write("# Netscape HTTP Cookie File\n\n")
@@ -35,7 +34,6 @@ if YOUTUBE_COOKIE:
             item = item.strip()
             if "=" in item:
                 key, value = item.split("=", 1)
-                # YouTube strictly requires these 7 columns to validate the session
                 f.write(f".youtube.com\tTRUE\t/\tTRUE\t2147483647\t{key}\t{value}\n")
 
 bot = Client("music_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
@@ -50,16 +48,15 @@ async def play_song(client, message):
 
     status_msg = await message.reply("🎧 Fetching audio stream...")
 
-    # Cleaned up format settings - No fake client spoofing needed!
+    # Robust audio fallback extraction configuration
     ydl_opts = {
-        'format': 'ba/best',
-        'extract_audio': True,
-        'audio_format': 'mp3',
+        'format': 'bestaudio/best',  # Look for the absolute best audio-only stream
         'noplaylist': True,
         'quiet': True,
+        'prefer_ffmpeg': True,       # Tell it to use FFmpeg directly to read the link
+        'geo_bypass': True,          # Prevents region locks from interrupting the fetch
     }
     
-    # Securely feeds the generated file to the streaming engine
     if os.path.exists("cookies.txt"):
         ydl_opts['cookiefile'] = "cookies.txt"
 
@@ -106,7 +103,7 @@ async def cb_handler(client, query):
             await query.answer("⏹ Music Stopped")
             await query.message.edit("⏹ **Playback Stopped.**")
             
-    except Exception as e:
+    except Exception:
         await query.answer("Action failed. Is the music playing?", show_alert=True)
 
 print("Launching systems...")
