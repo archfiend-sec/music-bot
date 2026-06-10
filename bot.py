@@ -4,7 +4,6 @@ from flask import Flask
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from pytgcalls import PyTgCalls
-
 import yt_dlp
 
 # --- Web Server for UptimeRobot ---
@@ -25,12 +24,22 @@ API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 SESSION_STRING = os.environ.get("SESSION_STRING")
-YOUTUBE_COOKIE = os.environ.get("YOUTUBE_COOKIE") # Direct text from Firefox
+YOUTUBE_COOKIE = os.environ.get("YOUTUBE_COOKIE")
+
+# --- Dynamic Cookie Builder ---
+# This converts your raw Firefox string into a flawless Netscape file on startup.
+if YOUTUBE_COOKIE:
+    with open("cookies.txt", "w") as f:
+        f.write("# Netscape HTTP Cookie File\n\n")
+        for item in YOUTUBE_COOKIE.split(";"):
+            item = item.strip()
+            if "=" in item:
+                key, value = item.split("=", 1)
+                # YouTube strictly requires these 7 columns to validate the session
+                f.write(f".youtube.com\tTRUE\t/\tTRUE\t2147483647\t{key}\t{value}\n")
 
 bot = Client("music_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 assistant = Client("assistant", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
-
-# Initialize the Direct-Stream PyTgCalls Engine
 call_py = PyTgCalls(assistant)
 
 @bot.on_message(filters.command("play") & filters.group)
@@ -41,21 +50,18 @@ async def play_song(client, message):
 
     status_msg = await message.reply("🎧 Fetching audio stream...")
 
-    # Clean configurations without any cookiefile parameters
+    # Cleaned up format settings - No fake client spoofing needed!
     ydl_opts = {
-        'format': 'bestaudio/best',
+        'format': 'ba/best',
         'extract_audio': True,
         'audio_format': 'mp3',
         'noplaylist': True,
         'quiet': True,
-        'extractor_args': {'youtube': {'client': ['android']}},
     }
     
-    # Injecting the raw text cookie straight into the HTTP network headers
-    if YOUTUBE_COOKIE:
-        ydl_opts['http_headers'] = {
-            'Cookie': YOUTUBE_COOKIE.strip()
-        }
+    # Securely feeds the generated file to the streaming engine
+    if os.path.exists("cookies.txt"):
+        ydl_opts['cookiefile'] = "cookies.txt"
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
