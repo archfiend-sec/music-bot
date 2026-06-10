@@ -4,7 +4,7 @@ from flask import Flask
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from pytgcalls import PyTgCalls
-from pytgcalls.types import AudioPiped
+
 import yt_dlp
 
 # --- Web Server for UptimeRobot ---
@@ -28,6 +28,8 @@ SESSION_STRING = os.environ.get("SESSION_STRING")
 
 bot = Client("music_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 assistant = Client("assistant", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
+
+# Initialize the Direct-Stream PyTgCalls Engine
 call_py = PyTgCalls(assistant)
 
 @bot.on_message(filters.command("play") & filters.group)
@@ -53,13 +55,11 @@ async def play_song(client, message):
             audio_url = info['url']
             title = info['title']
 
-        # Playback Logic (100% Stable v2.3.0 API)
         chat_id = message.chat.id
-        try:
-            await call_py.join_group_call(chat_id, AudioPiped(audio_url))
-        except Exception:
-            # Safely switch tracks if one is already playing
-            await call_py.change_stream(chat_id, AudioPiped(audio_url))
+        
+        # Native engine logic: just give it the raw link, no wrappers required!
+        # It automatically joins the call or updates the stream if already playing.
+        await call_py.play(chat_id, audio_url)
 
         # The Interactive Play Bar
         buttons = InlineKeyboardMarkup([
@@ -75,6 +75,7 @@ async def play_song(client, message):
     except Exception as e:
         await status_msg.edit(f"Stream encountered an issue: `{e}`")
 
+
 # --- Button Control Logic ---
 @bot.on_callback_query()
 async def cb_handler(client, query):
@@ -82,15 +83,15 @@ async def cb_handler(client, query):
     
     try:
         if query.data == "pause":
-            await call_py.pause_stream(chat_id)
+            await call_py.pause(chat_id)
             await query.answer("⏸ Music Paused")
         
         elif query.data == "resume":
-            await call_py.resume_stream(chat_id)
+            await call_py.resume(chat_id)
             await query.answer("▶️ Music Resumed")
         
         elif query.data == "stop":
-            await call_py.leave_group_call(chat_id)
+            await call_py.leave_call(chat_id)
             await query.answer("⏹ Music Stopped")
             await query.message.edit("⏹ **Playback Stopped.**")
             
