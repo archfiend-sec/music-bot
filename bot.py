@@ -1,5 +1,6 @@
 import os
 import threading
+import requests
 from flask import Flask
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -29,6 +30,44 @@ bot = Client("music_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 assistant = Client("assistant", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
 call_py = PyTgCalls(assistant)
 
+
+# --- Backup High-Quality Mirror Extractor ---
+def get_mirror_stream(query):
+    instances = [
+        "https://vid.puffyan.us",
+        "https://inv.tux.digital",
+        "https://invidious.protobuf.it",
+        "https://invidious.nerdvpn.de"
+    ]
+    for instance in instances:
+        try:
+            search_url = f"{instance}/api/v1/search?q={requests.utils.quote(query)}"
+            search_res = requests.get(search_url, timeout=5).json()
+            if not search_res:
+                continue
+            
+            video_id = search_res[0]['videoId']
+            title = search_res[0]['title']
+            
+            video_url = f"{instance}/api/v1/videos/{video_id}"
+            video_data = requests.get(video_url, timeout=5).json()
+            
+            audio_url = None
+            for fmt in video_data.get('adaptiveFormats', []):
+                if fmt.get('type', '').startswith('audio/'):
+                    audio_url = fmt.get('url')
+                    break
+                    
+            if not audio_url and video_data.get('formatStreams'):
+                audio_url = video_data['formatStreams'][0]['url']
+                
+            if audio_url:
+                return audio_url, title
+        except Exception:
+            continue
+    return None, None
+
+
 @bot.on_message(filters.command("play") & filters.group)
 async def play_song(client, message):
     query = " ".join(message.command[1:])
@@ -37,7 +76,7 @@ async def play_song(client, message):
 
     status_msg = await message.reply("🎧 Fetching audio stream...")
 
-    # TV/iOS Protocol Spoofing - Safely bypasses blocks without cookies
+    # Corrected internal yt-dlp parameters
     ydl_opts = {
         'format': 'bestaudio/best',  
         'noplaylist': True,
@@ -46,21 +85,32 @@ async def play_song(client, message):
         'geo_bypass': True,          
         'extractor_args': {
             'youtube': {
-                'client': ['tv', 'ios']
+                'player_client': ['ios', 'tv']
             }
         }
     }
 
+    audio_url = None
+    title = None
+
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(f"ytsearch:{query}", download=False)['entries'][0]
-            audio_url = info['url']
-            title = info['title']
+        # Strategy 1: Corrected Direct extraction
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(f"ytsearch:{query}", download=False)['entries'][0]
+                audio_url = info['url']
+                title = info['title']
+        except Exception:
+            # Strategy 2: Instant mirror extraction fallback if Render's IP is blocked
+            audio_url, title = get_mirror_stream(query)
+
+        if not audio_url:
+            return await status_msg.edit("Unable to locate a secure audio layout stream. Try again.")
 
         chat_id = message.chat.id
         await call_py.play(chat_id, audio_url)
 
-        # The Interactive Play Bar
+        # Interactive Play Bar
         buttons = InlineKeyboardMarkup([
             [
                 InlineKeyboardButton("⏸ Pause", callback_data="pause"),
@@ -79,21 +129,17 @@ async def play_song(client, message):
 @bot.on_callback_query()
 async def cb_handler(client, query):
     chat_id = query.message.chat.id
-    
     try:
         if query.data == "pause":
             await call_py.pause(chat_id)
             await query.answer("⏸ Music Paused")
-        
         elif query.data == "resume":
             await call_py.resume(chat_id)
             await query.answer("▶️ Music Resumed")
-        
         elif query.data == "stop":
             await call_py.leave_call(chat_id)
             await query.answer("⏹ Music Stopped")
             await query.message.edit("⏹ **Playback Stopped.**")
-            
     except Exception:
         await query.answer("Action failed. Is the music playing?", show_alert=True)
 
