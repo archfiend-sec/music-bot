@@ -1,5 +1,5 @@
-pyrogram==2.0.106
-py-tgcalls
+pyrofork
+git+https://github.com/pytgcalls/pytgcalls
 yt-dlp
 tgcrypto
 flask
