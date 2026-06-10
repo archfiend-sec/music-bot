@@ -4,7 +4,6 @@ from flask import Flask
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from pytgcalls import PyTgCalls
-
 import yt_dlp
 
 # --- Web Server for UptimeRobot ---
@@ -40,25 +39,27 @@ async def play_song(client, message):
 
     status_msg = await message.reply("🎧 Fetching audio stream...")
 
+    # The Android Bypass Configuration
     ydl_opts = {
         'format': 'bestaudio/best',
         'extract_audio': True,
         'audio_format': 'mp3',
         'noplaylist': True,
         'quiet': True,
+        # This exact line tricks YouTube into thinking the bot is a mobile phone
+        'extractor_args': {'youtube': {'client': ['android']}} 
     }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # Using scsearch (SoundCloud) to bypass YouTube bot blocks
-            info = ydl.extract_info(f"scsearch:{query}", download=False)['entries'][0]
+            # We are back to YouTube (ytsearch:)!
+            info = ydl.extract_info(f"ytsearch:{query}", download=False)['entries'][0]
             audio_url = info['url']
             title = info['title']
 
         chat_id = message.chat.id
         
-        # Native engine logic: just give it the raw link, no wrappers required!
-        # It automatically joins the call or updates the stream if already playing.
+        # Native engine logic
         await call_py.play(chat_id, audio_url)
 
         # The Interactive Play Bar
