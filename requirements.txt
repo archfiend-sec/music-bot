@@ -1,5 +1,4 @@
 pyrofork
 git+https://github.com/pytgcalls/pytgcalls
-yt-dlp
 tgcrypto
 flask
