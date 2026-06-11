@@ -5,11 +5,11 @@ import threading
 from flask import Flask
 
 # --- Auto-Dependency Injector ---
-# Installs the modern extraction engine automatically so you don't touch requirements.txt
+# Removed the invalid nodejs package. This will install flawlessly.
 try:
     import pytubefix
 except ImportError:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "pytubefix", "nodejs-wheel-binaries"])
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "pytubefix"])
     
 from pytubefix import Search, YouTube
 from pyrogram import Client, filters
