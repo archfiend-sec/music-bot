@@ -1,4 +1,0 @@
-pyrofork
-git+https://github.com/pytgcalls/pytgcalls
-tgcrypto
-flask
