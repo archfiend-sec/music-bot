@@ -6,9 +6,10 @@ from pyrogram import Client, filters
 from pyrogram.types import Message
 from pytgcalls import PyTgCalls, idle
 from pytgcalls.types import MediaStream, Update
+from pytgcalls import filters as ptc_filters
 import yt_dlp
 
-# --- RENDER HACK: Inject current directory to PATH so py-tgcalls finds FFmpeg ---
+# --- RENDER FFmpeg INJECTION ---
 os.environ["PATH"] += os.pathsep + os.getcwd()
 
 # --- ENV VARS ---
@@ -18,7 +19,7 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 SESSION_STRING = os.environ.get("SESSION_STRING", "")
 PORT = int(os.environ.get("PORT", 8080))
 
-# --- RENDER HEALTH CHECK SERVER ---
+# --- RENDER HEALTH CHECK ---
 app_flask = Flask(__name__)
 
 @app_flask.route("/")
@@ -26,12 +27,11 @@ def health_check():
     return "Bot is alive!", 200
 
 def run_flask():
-    # Runs quietly in a daemon thread
     app_flask.run(host="0.0.0.0", port=PORT)
 
 threading.Thread(target=run_flask, daemon=True).start()
 
-# --- TELEGRAM CLIENTS ---
+# --- MTPROTO CLIENTS ---
 bot = Client(
     "bot_client",
     api_id=API_ID,
@@ -49,10 +49,9 @@ userbot = Client(
 call_py = PyTgCalls(userbot)
 
 # --- IN-MEMORY QUEUE ---
-# Format: { chat_id: [{"title": "Song", "file_path": "downloads/..."}] }
 queue = {}
 
-# --- HELPER: DOWNLOAD AUDIO ---
+# --- HELPER: AUDIO EXTRACTOR ---
 def download_audio(query):
     os.makedirs("downloads", exist_ok=True)
     ydl_opts = {
@@ -70,7 +69,7 @@ def download_audio(query):
         file_path = ydl.prepare_filename(info)
         return file_path, info.get('title', 'Unknown Audio')
 
-# --- BOT COMMANDS ---
+# --- COMMAND PROTOCOLS ---
 @bot.on_message(filters.command("play") & filters.group)
 async def play_command(c: Client, m: Message):
     if len(m.command) < 2:
@@ -81,7 +80,6 @@ async def play_command(c: Client, m: Message):
     status_msg = await m.reply_text("🔎 Searching and downloading...")
 
     try:
-        # Run yt-dlp in a thread to prevent blocking the async event loop
         file_path, title = await asyncio.to_thread(download_audio, query)
     except Exception as e:
         return await status_msg.edit_text(f"❌ Download failed: {str(e)}")
@@ -91,7 +89,6 @@ async def play_command(c: Client, m: Message):
         
     queue[chat_id].append({"file_path": file_path, "title": title})
     
-    # If it's the only track in the queue, start playing immediately
     if len(queue[chat_id]) == 1:
         try:
             await call_py.play(chat_id, MediaStream(file_path))
@@ -108,7 +105,6 @@ async def skip_command(c: Client, m: Message):
     if chat_id not in queue or len(queue[chat_id]) == 0:
         return await m.reply_text("Nothing is playing right now.")
     
-    # Remove current track and delete its file
     old_track = queue[chat_id].pop(0)
     try:
         os.remove(old_track['file_path'])
@@ -147,8 +143,6 @@ async def stop_command(c: Client, m: Message):
 @bot.on_message(filters.command("pause") & filters.group)
 async def pause_command(c: Client, m: Message):
     try:
-        # Depending on minor version variations of py-tgcalls v2, 
-        # pause_stream() is standard.
         await call_py.pause_stream(m.chat.id)
         await m.reply_text("⏸ Paused.")
     except Exception as e:
@@ -162,35 +156,32 @@ async def resume_command(c: Client, m: Message):
     except Exception as e:
         await m.reply_text(f"Error: {e}")
 
-# --- AUTO-QUEUE PROGRESSION ---
-@call_py.on_stream_end()
+# --- QUEUE PROGRESSION ROUTINE ---
+@call_py.on_update(ptc_filters.stream_end)
 async def stream_ended_handler(client: PyTgCalls, update: Update):
     chat_id = update.chat_id
     if chat_id in queue and len(queue[chat_id]) > 0:
         
-        # Track finished: remove it from queue and delete the file
         old_track = queue[chat_id].pop(0)
         try:
             os.remove(old_track['file_path'])
         except OSError:
             pass
 
-        # Play next if exists
         if len(queue[chat_id]) > 0:
             next_track = queue[chat_id][0]
             try:
                 await call_py.play(chat_id, MediaStream(next_track['file_path']))
-            except Exception as e:
+            except Exception:
                 await call_py.leave_call(chat_id)
         else:
             await call_py.leave_call(chat_id)
 
 async def main():
-    print("Starting MTProto clients...")
+    print("Booting sequences initiated...")
     await bot.start()
-    # call_py.start() initializes the userbot attached to it
     await call_py.start()
-    print("Bot is alive and listening for commands!")
+    print("Systems nominal. Listening for MTProto events.")
     await idle()
 
 if __name__ == "__main__":
