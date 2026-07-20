@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: tg-music-bot
+    env: python
+    plan: free
+    buildCommand: |
+      pip install -r requirements.txt
+      echo "Downloading static FFmpeg..."
+      wget -q https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz
+      tar -xf ffmpeg-release-amd64-static.tar.xz
+      cp ffmpeg-*-amd64-static/ffmpeg .
+      cp ffmpeg-*-amd64-static/ffprobe .
+      chmod +x ffmpeg ffprobe
+      rm -rf ffmpeg-*-amd64-static*
+      echo "Build complete."
+    startCommand: python bot.py
